@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    paths: &code_paths
+      - 'src/**'
+      - 'assets/**'
+      - 'manifest.xml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'webpack.config.js'
+      - 'eslint.config.mjs'
+      - 'nginx.conf'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/main.yml'
+      - '.github/workflows/_ci.yml'
+      - '.github/workflows/_docker.yml'
+  pull_request:
+    paths: *code_paths
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/_ci.yml
+
+  docker-latest:
+    name: Docker latest
+    needs: ci
+    if: >-
+      github.event_name == 'push'
+      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker.yml
+    with:
+      tags: |
+        ghcr.io/retyc/retyc-outlook-plugin:latest
+#      tags: |
+#        ghcr.io/retyc/retyc-outlook-plugin:latest
+#        retyc/retyc-outlook-plugin:latest
+      version: latest
+    secrets: inherit

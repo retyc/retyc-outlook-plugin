@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    # Plain SemVer tags (1.0.0). The `v`-prefixed form (v1.0.0) also matches because
+    # the glob is greedy on the first segment, but the canonical convention here is no v.
+    tags: ['*.*.*']
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/_ci.yml
+
+  docker:
+    name: Docker
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/_docker.yml
+    with:
+      tags: |
+        ghcr.io/retyc/retyc-outlook-plugin:${{ github.ref_name }}
+        ghcr.io/retyc/retyc-outlook-plugin:latest
+#      tags: |
+#        ghcr.io/retyc/retyc-outlook-plugin:${{ github.ref_name }}
+#        ghcr.io/retyc/retyc-outlook-plugin:latest
+#        retyc/retyc-outlook-plugin:${{ github.ref_name }}
+#        retyc/retyc-outlook-plugin:latest
+      version: ${{ github.ref_name }}
+    secrets: inherit
+
+  release-artifacts:
+    name: Build & attach artifacts
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Manifest XML version is 4-part (e.g. 1.0.0.0). Match the first three parts against the tag.
+          MANIFEST_VERSION_RAW=$(node -e "const xml=require('fs').readFileSync('manifest.xml','utf8');const m=xml.match(/<Version>([^<]+)<\/Version>/);if(!m){process.exit(1)}console.log(m[1])")
+          MANIFEST_VERSION=$(echo "$MANIFEST_VERSION_RAW" | awk -F. '{printf "%s.%s.%s",$1,$2,$3}')
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${TAG#v}"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag '$TAG' does not match manifest.xml version '$MANIFEST_VERSION_RAW'"
+            exit 1
+          fi
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Tag '$TAG' does not match package.json version '$PACKAGE_VERSION'"
+            exit 1
+          fi
+          echo "VERSION=${TAG_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build (production)
+        run: npm run build
+
+      - name: Validate manifest
+        # Pin to 1.x: 2.x requires Node 20+ (ESM strip-bom). Local dev runs on Node 18.
+        run: npx --yes -p office-addin-manifest@1.13.6 office-addin-manifest validate manifest.xml
+
+      - name: Create release archive
+        run: |
+          ARCHIVE="retyc-outlook-plugin-${VERSION}.zip"
+          (cd dist && zip -r "../${ARCHIVE}" .)
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+          ls -la "${ARCHIVE}"
+
+      - name: Create / update GitHub Release with artifacts
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            ${{ env.ARCHIVE }}
+            manifest.xml

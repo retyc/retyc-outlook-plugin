@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retyc</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="assets/icon-80.png" alt="Retyc" class="logo" />
+      <div>
+        <h1>Retyc</h1>
+        <p class="subtitle">Secure file transfer for Outlook</p>
+      </div>
+    </header>
+
+    <!-- Compose section: visible only when the active item is a draft AND the user is signed in. -->
+    <section id="compose-section" class="hidden">
+      <h2>Send files via Retyc</h2>
+
+      <div id="compose-prepare" class="compose-block">
+        <p class="hint">
+          Encrypted client-side and uploaded directly to Retyc. Files
+          <strong>never go through Outlook attachments</strong>.
+        </p>
+
+        <div class="field">
+          <span class="field-label">Files</span>
+          <div id="dropzone" class="dropzone" tabindex="0">
+            <input type="file" id="file-input" multiple class="file-input-hidden" />
+            <div class="dropzone-empty">
+              <div class="dropzone-icon">&#128230;</div>
+              <p class="dropzone-cta"><strong>Drop files here</strong> or click to choose</p>
+              <p class="dropzone-hint">Up to 5 GB total. Any file type.</p>
+            </div>
+            <div id="dropzone-files" class="dropzone-files hidden">
+              <ul id="file-list" class="file-list"></ul>
+            </div>
+          </div>
+          <div id="file-list-meta" class="field-meta hidden">
+            <span id="file-list-summary"></span>
+            <button type="button" id="btn-clear-files" class="btn-link">Remove all</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label class="field-label" for="recipients-input">Recipients</label>
+            <button type="button" id="btn-recipients-from-outlook" class="btn-link" title="Replace with the current To/Cc/Bcc from Outlook">Use Outlook recipients</button>
+          </div>
+          <textarea
+            id="recipients-input"
+            class="text-input"
+            rows="2"
+            placeholder="alice@example.com, bob@example.com"
+            autocomplete="off"
+            spellcheck="false"
+          ></textarea>
+          <div class="field-meta">
+            <span id="recipients-count" class="muted"></span>
+          </div>
+          <p id="recipients-error" class="field-error hidden"></p>
+          <p class="field-hint">Will receive the email and can decrypt the transfer. Written into Outlook's <strong>To</strong> field on click.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="compose-passphrase">
+            Passphrase <span class="field-label-aside">(required for recipients without a Retyc account)</span>
+          </label>
+          <div class="passphrase-row">
+            <input
+              type="password"
+              id="compose-passphrase"
+              class="text-input"
+              placeholder="Enter a passphrase…"
+              autocomplete="off"
+            />
+            <button type="button" id="btn-toggle-pass" class="btn-icon" title="Show/hide passphrase">&#128065;</button>
+          </div>
+          <p id="compose-passphrase-error" class="field-error hidden"></p>
+        </div>
+
+        <button type="button" id="btn-send-via-retyc" class="btn btn-primary btn-block" disabled>
+          Encrypt &amp; insert Retyc link
+        </button>
+      </div>
+
+      <div id="compose-uploading" class="compose-block hidden">
+        <div class="spinner"></div>
+        <p id="compose-upload-status" class="status-text">Uploading files to Retyc…</p>
+        <div class="progress-bar">
+          <div id="compose-progress-fill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <p class="hint hint-center">Please wait. Do not close this pane.</p>
+      </div>
+
+      <div id="compose-done" class="compose-block hidden">
+        <div class="success-icon">&#10003;</div>
+        <p class="success-title">Transfer ready</p>
+        <p class="hint hint-center">
+          A secure download link has been appended to your message body.<br/>
+          Click <strong>Send</strong> in Outlook to deliver.
+        </p>
+        <button type="button" id="btn-compose-new" class="btn btn-secondary btn-block">Prepare another transfer</button>
+      </div>
+
+      <div id="compose-error" class="compose-block hidden">
+        <div class="error-icon">&#10007;</div>
+        <p class="error-title">Upload failed</p>
+        <p id="compose-error-message" class="error-detail"></p>
+        <button type="button" id="btn-compose-retry" class="btn btn-secondary btn-block">Back</button>
+      </div>
+    </section>
+
+    <form id="settings-form" novalidate>
+      <section id="auth-section" class="collapsible">
+        <h2 class="section-header">
+          <span>Authentication</span>
+          <span class="chevron" aria-hidden="true"></span>
+        </h2>
+        <div class="section-body">
+          <div id="auth-loading" class="auth-block">
+            <div class="spinner"></div>
+          </div>
+
+          <div id="auth-authenticated" class="auth-block hidden">
+            <div class="status-badge success"><span class="dot"></span>Connected to Retyc</div>
+
+            <div class="user-card">
+              <div class="user-info">
+                <span id="user-fullname" class="user-fullname"></span>
+                <span id="user-email" class="user-email"></span>
+                <span id="token-expires" class="token-expires"></span>
+              </div>
+              <button type="button" id="btn-refresh" class="btn-icon-round" title="Refresh token">&#8634;</button>
+            </div>
+
+            <button type="button" id="btn-logout" class="btn btn-secondary">Log out</button>
+          </div>
+
+          <div id="auth-unauthenticated" class="auth-block hidden">
+            <div class="status-badge error"><span class="dot"></span>Not connected</div>
+            <p class="hint">Log in to encrypt and upload files via Retyc.</p>
+            <button type="button" id="btn-login" class="btn btn-primary">Log in with Retyc</button>
+          </div>
+
+          <div id="auth-device-flow" class="auth-block hidden">
+            <p class="hint">Open this URL in your browser and enter the code:</p>
+            <a id="verification-url" href="#" target="_blank" rel="noopener" class="verification-link"></a>
+            <div class="code-box">
+              <span id="user-code" class="user-code"></span>
+            </div>
+            <p class="hint">Waiting for authentication… <span class="spinner-inline"></span></p>
+            <button type="button" id="btn-cancel-login" class="btn btn-secondary">Cancel</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="api-app-section" class="collapsible collapsed">
+        <h2 class="section-header">
+          <span>API &amp; App</span>
+          <span class="chevron" aria-hidden="true"></span>
+        </h2>
+        <div class="section-body">
+          <label class="field">
+            <span class="field-label">API URL</span>
+            <input type="url" id="api-url" name="apiUrl" placeholder="https://api.retyc.com" required />
+            <span class="field-hint">The Retyc API base URL.</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">App URL</span>
+            <input type="url" id="app-url" name="appUrl" placeholder="https://retyc.com" required />
+            <span class="field-hint">Used to build the transfer link added to emails (e.g. https://retyc.com/transfer/…).</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Transfer expiry (days)</span>
+            <input type="number" id="expires-days" name="expiresDays" min="1" max="365" placeholder="7" required />
+            <span class="field-hint">How many days before the Retyc transfer expires.</span>
+          </label>
+
+          <div id="save-feedback" class="feedback hidden"></div>
+
+          <div class="form-actions">
+            <button type="submit" id="btn-save" class="btn btn-primary">Save settings</button>
+          </div>
+        </div>
+      </section>
+    </form>
+  </div>
+</body>
+</html>

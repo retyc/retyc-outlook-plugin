@@ -1,0 +1,20 @@
+.git
+.github
+.idea
+.certs
+.vscode
+
+node_modules
+dist
+artifacts
+
+manifest.dev.xml
+
+*.log
+*.swp
+.DS_Store
+
+# Docs not required for the build
+DEV_VM.md
+SECURITY.md
+CLAUDE.md

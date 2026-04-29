@@ -1,0 +1,6 @@
+/dist
+/node_modules
+*.swp
+/.idea
+/.certs
+/manifest.*.xml
