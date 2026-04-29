@@ -23,11 +23,8 @@ jobs:
       tags: |
         ghcr.io/retyc/retyc-outlook-plugin:${{ github.ref_name }}
         ghcr.io/retyc/retyc-outlook-plugin:latest
-#      tags: |
-#        ghcr.io/retyc/retyc-outlook-plugin:${{ github.ref_name }}
-#        ghcr.io/retyc/retyc-outlook-plugin:latest
-#        retyc/retyc-outlook-plugin:${{ github.ref_name }}
-#        retyc/retyc-outlook-plugin:latest
+        retyc/retyc-outlook-plugin:${{ github.ref_name }}
+        retyc/retyc-outlook-plugin:latest
       version: ${{ github.ref_name }}
     secrets: inherit
 
