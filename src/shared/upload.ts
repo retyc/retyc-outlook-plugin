@@ -6,21 +6,25 @@
 // model intact — the cleartext attachment never traverses Exchange — and avoids the
 // `getAttachmentContentAsync` quirks of Classic Outlook desktop's event runtime.
 
-import type { RetycSDK } from '@retyc/sdk'
-import { TRANSFER_PATH_PREFIX } from './constants'
+import type { RetycSDK, UploadProgress as SdkUploadProgress } from '@retyc/sdk'
 
 const MAX_TOTAL_BYTES = 5 * 1024 * 1024 * 1024 // 5 GB hard limit
 
+export type UploadPhase = 'reading' | 'uploading'
+
 export interface UploadProgress {
+  phase: UploadPhase
   fileName: string
-  fileIndex: number
+  fileIndex: number   // 0-based
   totalFiles: number
+  uploadedBytes: number
+  totalBytes: number
+  ratio: number       // 0..1
 }
 
 export interface UploadOptions {
   recipients: string[]
-  appUrl: string
-  expiresDays: number
+  expires: number  // seconds
   passphrase?: string
   onProgress?: (p: UploadProgress) => void
 }
@@ -57,7 +61,7 @@ export async function readInitialRecipients(item: Office.MessageCompose): Promis
   return [...new Set(all)]
 }
 
-export function setOutlookTo(item: Office.MessageCompose, emails: string[]): Promise<void> {
+function setOutlookTo(item: Office.MessageCompose, emails: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     item.to.setAsync(emails, (r) => {
       if (r.status === Office.AsyncResultStatus.Succeeded) resolve()
@@ -84,35 +88,24 @@ function setBodyHtml(item: Office.MessageCompose, html: string): Promise<void> {
   })
 }
 
-async function appendBodyHtml(item: Office.MessageCompose, html: string): Promise<void> {
-  // Office.js compose body has no appendAsync; read + set is the supported pattern.
-  const existing = await getBodyHtml(item)
-  await setBodyHtml(item, existing + html)
+// Inserts the snippet immediately before Outlook's signature block (id="Signature" on Classic
+// desktop, id="signature" on some web/new clients), so the link sits inside the user's message
+// rather than dangling under the signature. Falls back to appending if no signature is detected.
+function insertBeforeSignature(existing: string, snippet: string): string {
+  const match = existing.match(/<div\b[^>]*\bid=["']signature["'][^>]*>/i)
+  if (match && match.index !== undefined) {
+    return existing.slice(0, match.index) + snippet + existing.slice(match.index)
+  }
+  return existing + snippet
 }
 
-// --- Email validation ---
-
-const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/
-
-export function parseRecipientsInput(raw: string): { valid: string[]; invalid: string[] } {
-  const valid: string[] = []
-  const invalid: string[] = []
-  const seen = new Set<string>()
-  for (const candidate of raw.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)) {
-    const key = candidate.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    if (EMAIL_RE.test(candidate)) valid.push(candidate)
-    else invalid.push(candidate)
-  }
-  return { valid, invalid }
+async function injectLinkSnippet(item: Office.MessageCompose, snippet: string): Promise<void> {
+  // Office.js compose body has no appendAsync; read + set is the supported pattern.
+  const existing = await getBodyHtml(item)
+  await setBodyHtml(item, insertBeforeSignature(existing, snippet))
 }
 
 // --- Link rendering ---
-
-function buildTransferUrl(appUrl: string, slug: string): string {
-  return `${appUrl.replace(/\/$/, '')}${TRANSFER_PATH_PREFIX}/${encodeURIComponent(slug)}`
-}
 
 function escapeHtml(str: string): string {
   return str
@@ -161,7 +154,15 @@ export async function performRetycTransfer(
   const uploadFiles: Array<{ name: string; mimeType: string; data: Uint8Array; size: number }> = []
   for (let idx = 0; idx < files.length; idx++) {
     const file = files[idx]
-    options.onProgress?.({ fileName: file.name, fileIndex: idx, totalFiles: files.length })
+    options.onProgress?.({
+      phase: 'reading',
+      fileName: file.name,
+      fileIndex: idx,
+      totalFiles: files.length,
+      uploadedBytes: 0,
+      totalBytes,
+      ratio: 0,
+    })
     const buffer = await file.arrayBuffer()
     uploadFiles.push({
       name: file.name,
@@ -173,12 +174,27 @@ export async function performRetycTransfer(
 
   const result = await sdk.transfers.upload({
     recipients: options.recipients,
-    expires: options.expiresDays * 24 * 60 * 60,
+    expires: options.expires,
     files: uploadFiles,
     ...(options.passphrase ? { passphrase: options.passphrase } : {}),
+    ...(options.onProgress
+      ? {
+          onProgress: (p: SdkUploadProgress) => {
+            options.onProgress!({
+              phase: 'uploading',
+              fileName: p.currentFile.name,
+              fileIndex: p.currentFile.index,
+              totalFiles: p.currentFile.total,
+              uploadedBytes: p.uploadedBytes,
+              totalBytes: p.totalBytes,
+              ratio: p.ratio,
+            })
+          },
+        }
+      : {}),
   })
 
-  const transferUrl = buildTransferUrl(options.appUrl, result.slug)
+  const transferUrl = result.webUrl
 
   // Mirror the recipients into Outlook's To field so the email reaches them when the user
   // clicks Send. We don't touch Cc/Bcc — those remain whatever the user typed in Outlook.
@@ -192,8 +208,8 @@ export async function performRetycTransfer(
     }
   }
 
-  // Append the Retyc link to the compose body (read + set; Office.js has no appendAsync here).
-  await appendBodyHtml(item, buildLinkSnippet(transferUrl))
+  // Inject the Retyc link into the compose body, before Outlook's signature when present.
+  await injectLinkSnippet(item, buildLinkSnippet(transferUrl))
 
   return { transferUrl }
 }

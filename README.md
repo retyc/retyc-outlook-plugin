@@ -31,7 +31,8 @@
 - **Passphrase support** — required for recipients without a Retyc account, or for passphrase-only transfers without a
   recipient list (≥ 8 characters)
 - **OIDC Device Flow auth** — log in with your Retyc account directly from Outlook
-- **Configurable** — API URL, app URL, and transfer expiry are all adjustable in the task pane
+- **Configurable transfer expiry** — pick how long the transfer link stays alive, from the task pane Options
+- **Bilingual UI** — auto-detects Outlook's display language; English / French bundled, switchable from the Account tab
 - **Clean emails** — a Retyc download link is appended to the message body; recipients are written into Outlook's `To`
   field on confirm
 
@@ -54,34 +55,22 @@ the pane's header) to keep it open across drafts.
 In a compose window with the task pane open:
 
 1. **Drop files** into the dropzone (or click to pick).
-2. Type **recipients** in the task pane. The list pre-fills from Outlook's To/Cc/Bcc but you control it. Click **Use
-   Outlook recipients** to re-sync.
-3. Optionally enter a **passphrase** (≥ 8 chars) — required if you have no recipients, or for recipients without a Retyc
-   account.
-4. Click **Encrypt & insert Retyc link**.
-5. The task pane uploads the encrypted bytes, writes the recipients into Outlook's `To` field, and appends a Retyc
-   download link to the message body.
+2. The recipient list mirrors Outlook's `To` / `Cc` / `Bcc` fields — edit them in Outlook and the pane stays in sync.
+   Your own address is filtered out automatically.
+3. Optionally toggle **Use a passphrase** in the Options panel (≥ 8 chars) — required if you have no recipients, or for
+   recipients without a Retyc account.
+4. Pick a transfer expiry from the same Options panel.
+5. Click **Encrypt & insert Retyc link** — the pane uploads the encrypted bytes, writes the merged recipient list into
+   Outlook's `To` field, and appends a Retyc download link to the message body.
 6. Click **Send** in Outlook normally.
 
-### 3. Settings
-
-Open the **Authentication** and **API & App** sections in the task pane (collapsible chevrons):
-
-| Setting         | Description                                     | Default                 |
-|-----------------|-------------------------------------------------|-------------------------|
-| API URL         | Retyc backend API                               | `https://api.retyc.com` |
-| App URL         | Used to build the transfer link added to emails | `https://retyc.com`     |
-| Transfer expiry | Days before the transfer expires                | `7`                     |
-
-The Authentication card auto-collapses once you're signed in to keep the focus on the compose flow; it re-opens on
-logout.
+The Account tab shows your current quota (storage + transfers) and lets you switch the UI language.
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 18+ (the codebase pins `eslint@9`, `copy-webpack-plugin@13`, `office-addin-manifest@1.13.6` for Node 18
-  compat — see [`CLAUDE.md`](CLAUDE.md) for the upgrade matrix)
+- Node.js 24+ (declared in `package.json` engines and `.nvmrc`)
 - The `@retyc/sdk` package (declared as a runtime dependency, fetched from the public npm registry)
 - An Outlook account that supports Mailbox API 1.7+
 
@@ -89,12 +78,12 @@ logout.
 
 ```bash
 npm install
-npm run build:dev      # development build (with source maps)
-npm run build          # production build
+npm run build:dev      # vite development build
+npm run build          # vite production build
 npm run watch          # rebuild on file changes
-npm run typecheck      # tsc --noEmit
+npm run typecheck      # vue-tsc --noEmit
 npm run lint           # eslint src
-npm run start          # webpack dev server (HTTPS, port 3000)
+npm run start          # vite dev server (HTTPS, port 3000)
 npm run dev:setup      # regenerate mkcert leaf cert + manifest.dev.xml (used by DEV_VM workflow)
 ```
 
@@ -115,38 +104,24 @@ For development against a Windows VM (recommended for testing Classic Outlook de
 
 ### Production hosting
 
-A multi-stage `Dockerfile` is provided. It builds the static bundle with Node 22 and serves it through nginx 1.30
-alpine-slim (~13 MB image). The image is **environment-agnostic** — the same artifact serves preprod, prod, staging,
-etc. just by passing different env vars at run time:
-
-| Env var       | Default                     | Purpose                                                                                                                                                                                |
-|---------------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `BASE_URL`    | `https://outlook.retyc.com` | Public URL of the asset host. Rewritten into `manifest.xml` (taskpane URL, icons).                                                                                                     |
-| `LANDING_URL` | `https://retyc.com/`        | Where browsers hitting the bare-domain root (`/`) get redirected. Outlook itself loads `/taskpane.html` directly, so this only affects users typing the asset host into their browser. |
+A multi-stage `Dockerfile` is provided. It builds the static bundle with Node 24 and serves it through nginx 1.30
+alpine-slim (~13 MB image). Images are **per-environment**: the manifest baked in (`manifest.xml`) and the API URL
+(`VITE_RETYC_API_URL`, defaults to `https://api.retyc.com`) are resolved at build time. Build a separate image for each
+environment.
 
 ```bash
-# Build once
-docker build -t retyc-outlook-plugin .
+# Prod
+docker build -t retyc-outlook-plugin:prod .
 
-# Run anywhere — BASE_URL and LANDING_URL are resolved at container start
-docker run -p 80:80 \
-  -e BASE_URL=https://outlook-addin.retyc.com \
-  -e LANDING_URL=https://retyc.com/ \
-  retyc-outlook-plugin
-
-# Same image, different environment, just change the env values
-docker run -p 80:80 \
-  -e BASE_URL=https://addin-preprod.retyc.com \
-  -e LANDING_URL=https://preprod.retyc.com/ \
-  retyc-outlook-plugin
+# Other environments — provide your own gitignored manifest, override the API URL at build time
+cp manifest.<env>.xml manifest.xml
+docker build \
+  --build-arg VITE_RETYC_API_URL=https://api.<env>.example.com \
+  -t retyc-outlook-plugin:<env> .
 ```
 
-Mechanism: both `manifest.xml` and the nginx config are kept inside the image as templates
-(`/etc/retyc/manifest.xml.template` and `/etc/retyc/nginx.conf.template`, outside the web root). A small entrypoint
-script in `/docker-entrypoint.d/40-substitute-base-url.sh` rewrites them into `/usr/share/nginx/html/manifest.xml` and
-`/etc/nginx/conf.d/default.conf` on every container start, picking up the current env values. nginx then loads its
-config and serves the resolved manifest. Restart the container with new env values to switch environments without
-rebuilding.
+The `/` redirect is hardcoded to `/taskpane.html` (relative). Browsers hitting the bare-domain root land on the task
+pane directly — Outlook itself fetches `/taskpane.html` and never relies on the redirect.
 
 CI/release workflows publish to **ghcr.io/retyc/retyc-outlook-plugin** (and Docker Hub `retyc/retyc-outlook-plugin` once
 the credentials block in `_docker.yml` is uncommented).
@@ -155,11 +130,17 @@ the credentials block in `_docker.yml` is uncommented).
 
 ```
 src/
-  shared/         # constants, settings, sdk-factory, token-store, storage, upload pipeline
-  taskpane/       # the only runtime: HTML, CSS, TS for auth + dropzone + send-via-Retyc
-  types/          # CSS module shim
-assets/           # PNG icons (XML manifest does not accept SVG)
+  main.ts         # bootstrap (Buffer polyfill, lucide icons, i18n, Office.onReady → mount)
+  App.vue         # auth gate + UTabs (Transfer / Account)
+  components/     # LoginWall, TransferTab, AccountTab, DropZone (lazy-loaded .vue)
+  composables/    # useAuth, useTransfer, useDropOverlay
+  shared/         # constants, sdk-factory, storage, token-store, upload pipeline
+  i18n.ts         # vue-i18n singleton + locale detection
+  locales/        # en.ts, fr.ts message bundles
+  assets/         # custom.css with the @theme block
+public/           # PNG icons (XML manifest does not accept SVG)
 scripts/          # dev-setup.js (regenerates mkcert leaf + manifest.dev.xml)
+taskpane.html     # Vite HTML entry (kept at repo root)
 manifest.xml      # Office Add-in XML manifest (Outlook MailApp, VersionOverrides V1_0 + V1_1)
 manifest.dev.xml  # generated for VM sideload, gitignored
 Dockerfile        # multi-stage build → nginx:1.30.0-alpine-slim, ~13 MB
@@ -167,10 +148,9 @@ Dockerfile        # multi-stage build → nginx:1.30.0-alpine-slim, ~13 MB
 
 ### Architecture
 
-Outlook does not have a long-lived background script the way Thunderbird does. The add-in declares **a single runtime
-** — the task pane — and does all its work there. Persistence is delegated to `Office.context.roamingSettings`
-(mailbox-scoped, syncs across devices) wrapped by a small abstraction that falls back to `localStorage` when the page
-is opened standalone in a browser.
+The add-in declares **a single runtime** — the task pane — and does all its work there. Persistence is delegated to
+`Office.context.roamingSettings` (mailbox-scoped, syncs across devices) wrapped by a small abstraction that falls back
+to `localStorage` when the page is opened standalone in a browser.
 
 **Why no `OnMessageSend` interception?** Office.js's event runtime is isolated from the compose runtime on Classic
 Outlook desktop — `getAttachmentContentAsync` returns empty content for attachments unless the draft has been saved to

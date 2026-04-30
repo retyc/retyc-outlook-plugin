@@ -1,24 +1,19 @@
-import { RetycSDK } from '@retyc/sdk'
+import type { RetycSDK } from '@retyc/sdk'
 import { OfficeRoamingTokenStore } from './token-store'
-import { getApiUrl } from './settings'
+import { API_URL } from './constants'
 
 let _sdk: RetycSDK | null = null
-let _currentApiUrl: string | null = null
 const _store = new OfficeRoamingTokenStore()
 
 export async function getSDK(): Promise<RetycSDK> {
-  const apiUrl = getApiUrl()
-  if (_sdk && _currentApiUrl === apiUrl) return _sdk
-
-  const sdk = new RetycSDK({ apiUrl, tokenStore: _store })
-  // Pre-load OIDC config so refresh works on first call after a runtime cold-start.
+  if (_sdk) return _sdk
+  const { RetycSDK } = await import('@retyc/sdk')
+  const sdk = new RetycSDK({ apiUrl: API_URL, tokenStore: _store })
   await sdk.preload()
   _sdk = sdk
-  _currentApiUrl = apiUrl
   return _sdk
 }
 
 export function invalidateSDK(): void {
   _sdk = null
-  _currentApiUrl = null
 }

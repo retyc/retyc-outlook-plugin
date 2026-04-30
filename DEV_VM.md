@@ -40,7 +40,7 @@ DEV_HOST=192.168.1.42 npm run dev:setup            # override for a LAN-bridged 
 This single command writes:
 
 - `.certs/dev.pem` + `.certs/dev-key.pem` — leaf certificate covering `DEV_HOST`, `localhost`, `127.0.0.1`, `::1`
-  (consumed by webpack-dev-server).
+  (consumed by the Vite dev server).
 - `manifest.dev.xml` — the manifest with all URLs rewritten to `https://DEV_HOST:3000`.
 
 **Always re-run after changing the VM's networking.** Otherwise the cert SAN no longer matches the manifest's URLs and
@@ -72,14 +72,12 @@ Copy `rootCA.pem` from the host (path printed by `mkcert -CAROOT`) to the VM, th
     - **My add-ins** (left panel) → at the bottom: **Add a custom add-in → Add from File**.
     - Pick `manifest.dev.xml` (the file picker filters for `.xml`).
 3. Restart Outlook (forced by the dialog).
-4. The **Retyc** button appears on the default ribbon, both in compose and read mode.
+4. The **Retyc** button appears on the compose-window ribbon (the manifest only registers a
+   `MessageComposeCommandSurface` extension point).
 
 > "Add from File" greyed out → your account doesn't allow custom add-ins. Use
 > a [Microsoft 365 Developer Program](https://developer.microsoft.com/microsoft-365/dev-program) tenant for free testing
 > without admin policy roadblocks.
->
-> Personal Microsoft accounts (Outlook.com / Hotmail) only support the task pane and ribbon — the `messageSending`
-> interception is silently ignored. Test the full flow with an M365 account.
 
 ## Daily workflow
 
@@ -89,9 +87,9 @@ npm run start                       # serves https://<DEV_HOST>:3000 using the t
 npm run watch                       # alternative: rebuild on change without serving
 ```
 
-Inside the VM, every change to `src/**` is picked up by webpack-dev-server and
-reloaded into the Outlook iframes. No need to re-sideload as long as the
-manifest URLs and file names don't change.
+Inside the VM, every change to `src/**` is picked up by the Vite dev server and
+HMR'd into the Outlook iframes. No need to re-sideload as long as the manifest
+URLs and file names don't change.
 
 If you change `manifest.xml` **or** the VM's networking, run `npm run dev:setup`
 again, copy `manifest.dev.xml` to the VM, and re-add the add-in (Outlook caches
@@ -100,12 +98,7 @@ the manifest).
 ## Debugging from the VM
 
 - **Task pane console**: right-click inside the pane → **Inspect**. Opens a WebView2 DevTools window.
-- **Dialog console**: same — right-click in the popup once it's visible.
-- **Commands runtime** (the headless one that handles `OnMessageSend`): not directly inspectable. Practical workaround —
-  log via `console.error`, then open the task pane DevTools where commands runtime errors typically surface in the same
-  WebView2 process. Or watch `%LOCALAPPDATA%\Microsoft\Office\16.0\Wef\Outlook\<id>\` for runtime traces.
-- **Manifest validation**: `npx -p office-addin-manifest@1.13.6 office-addin-manifest validate manifest.xml` on the
-  host. (Pin to 1.x — v2.x ESM-requires Node 20+.)
+- **Manifest validation**: `npx -p office-addin-manifest@latest office-addin-manifest validate manifest.xml` on the host.
 - **Manual reload of the add-in inside Outlook**: disable & re-enable from **Get Add-ins → My add-ins**, or remove +
   re-add the custom add-in.
 
@@ -113,21 +106,19 @@ the manifest).
 
 | Symptom                                               | Likely cause                                                 | Fix                                                                     |
 |-------------------------------------------------------|--------------------------------------------------------------|-------------------------------------------------------------------------|
-| `https://<DEV_HOST>:3000` times out from VM           | Dev server bound to `127.0.0.1` only                         | Confirm `host: '0.0.0.0'` in `webpack.config.js`                        |
-| `Invalid Host header` 403                             | webpack-dev-server 5+ host check                             | `allowedHosts: 'all'` already set                                       |
+| `https://<DEV_HOST>:3000` times out from VM           | Dev server bound to `127.0.0.1` only                         | Confirm `server.host: '0.0.0.0'` in `vite.config.mts`                   |
 | Cert warning in Edge inside VM                        | rootCA missing from Local Machine store                      | Re-import `rootCA.pem` (Local Machine, not Current User)                |
 | Cert warning ONLY for the new IP                      | Leaf cert SAN doesn't include the new IP                     | Re-run `npm run dev:setup` with the right `DEV_HOST`                    |
 | Icons missing on the ribbon, "Retyc travaille…" hangs | Outlook can't fetch from `<DEV_HOST>:3000` (cert or network) | Test in Edge first; restart Outlook after each cert change              |
 | `Add-in could not start` in Outlook                   | Manifest URL unreachable                                     | Ping the host IP from the VM, check Linux firewall (`sudo iptables -L`) |
-| `messageSending` never fires                          | Personal account or Mailbox <1.12                            | Use an M365 account with Outlook ≥ 2024                                 |
 
 ## Files involved
 
 ```
 .certs/dev.pem .certs/dev-key.pem     mkcert leaf for current DEV_HOST (gitignored)
-assets/icon-{16,32,48,64,80,128}.png  PNG icons (XML manifest does not accept SVG)
-manifest.xml                          canonical manifest, targets localhost
+public/assets/icon-{16,32,48,64,80,128}.png  PNG icons (XML manifest does not accept SVG)
+manifest.xml                          prod manifest, targets https://outlook.retyc.com
 manifest.dev.xml                      generated for VM sideload, targets DEV_HOST (gitignored)
 scripts/dev-setup.js                  regenerates cert + manifest from DEV_HOST in one shot
-webpack.config.js                     reads .certs/dev.{pem,-key.pem}, binds 0.0.0.0
+vite.config.mts                       reads .certs/dev.{pem,-key.pem}, binds 0.0.0.0
 ```

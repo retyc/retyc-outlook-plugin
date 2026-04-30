@@ -7,7 +7,7 @@
 // Override with: DEV_HOST=10.0.2.2 npm run dev:setup
 //
 // Both outputs go to gitignored locations:
-//   .certs/dev.pem + .certs/dev-key.pem   (used by webpack-dev-server)
+//   .certs/dev.pem + .certs/dev-key.pem   (used by the Vite dev server)
 //   manifest.dev.xml                      (sideload this in Outlook)
 //
 // Re-run this script every time the VM's networking changes — the cert SAN and
