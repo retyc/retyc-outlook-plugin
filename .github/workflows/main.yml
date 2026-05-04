@@ -5,19 +5,20 @@ on:
     branches: ['**']
     paths: &code_paths
       - 'src/**'
-      - 'assets/**'
+      - 'public/**'
+      - 'taskpane.html'
       - 'manifest.xml'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
-      - 'webpack.config.js'
+      - 'tsconfig.node.json'
+      - 'vite.config.mts'
       - 'eslint.config.mjs'
-      - 'nginx.conf'
+      - '.nvmrc'
       - 'Dockerfile'
       - '.dockerignore'
-      - '.github/workflows/main.yml'
-      - '.github/workflows/_ci.yml'
-      - '.github/workflows/_docker.yml'
+      - '.docker/**'
+      - '.github/workflows/**'
   pull_request:
     paths: *code_paths
 

@@ -8,7 +8,7 @@
   <ProviderName>Retyc</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Retyc"/>
-  <Description DefaultValue="Send large files securely with end-to-end encryption via Retyc."/>
+  <Description DefaultValue="Transfer large files with end-to-end encryption via Retyc."/>
   <IconUrl DefaultValue="https://outlook.retyc.com/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="https://outlook.retyc.com/assets/icon-128.png"/>
   <SupportUrl DefaultValue="https://support.retyc.com"/>

@@ -4,3 +4,5 @@
 /.idea
 /.certs
 /manifest.*.xml
+/auto-imports.d.ts
+/components.d.ts
