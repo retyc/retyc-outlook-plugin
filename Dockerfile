@@ -5,7 +5,6 @@ FROM node:24-alpine AS builder
 
 ARG VERSION=dev
 ARG VITE_RETYC_API_URL
-ENV VITE_RETYC_API_URL=${VITE_RETYC_API_URL}
 
 WORKDIR /src
 
@@ -17,7 +16,7 @@ COPY public ./public
 COPY manifest.xml ./
 COPY src ./src
 
-RUN npm run build
+RUN VITE_RETYC_API_URL=$VITE_RETYC_API_URL npm run build
 
 #
 # Prod stage (nginx serving the static bundle)
