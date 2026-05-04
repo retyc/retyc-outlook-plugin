@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="128" src="https://raw.githubusercontent.com/retyc/retyc-outlook-plugin/master/assets/icon-128.png" alt="Retyc logo" />
+  <img width="128" src="https://raw.githubusercontent.com/retyc/retyc-outlook-plugin/master/public/assets/icon-128.png" alt="Retyc logo" />
 </p>
 
 <h1 align="center">Retyc for Outlook</h1>
