@@ -24,7 +24,7 @@ export interface UploadProgress {
 
 export interface UploadOptions {
   recipients: string[]
-  expires: number  // seconds
+  expires: number | null  // seconds; null = never expires
   passphrase?: string
   onProgress?: (p: UploadProgress) => void
 }
@@ -116,16 +116,30 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function buildLinkSnippet(transferUrl: string): string {
+function formatExpiry(seconds: number): string {
+  if (seconds >= 2 * 31536000) return `${Math.round(seconds / 31536000)} years`
+  if (seconds >= 31536000)     return '1 year'
+  if (seconds >= 2 * 2592000)  return `${Math.round(seconds / 2592000)} months`
+  if (seconds >= 2592000)      return '1 month'
+  if (seconds >= 2 * 86400)    return `${Math.round(seconds / 86400)} days`
+  if (seconds >= 86400)        return '1 day'
+  if (seconds >= 2 * 3600)     return `${Math.round(seconds / 3600)} hours`
+  if (seconds >= 3600)         return '1 hour'
+  return `${Math.round(seconds / 60)} minutes`
+}
+
+function buildLinkSnippet(transferUrl: string, expires: number | null): string {
   const safe = escapeHtml(transferUrl)
+  const expiryLine = expires !== null
+    ? ` &nbsp;&bull;&nbsp; This link expires in ${escapeHtml(formatExpiry(expires))}`
+    : ''
   return `
 <br><br>
-<hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
-<p style="font-family:sans-serif;font-size:14px;color:#444;margin:0">
+<div style="font-family:sans-serif;font-size:14px;color:#444;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;display:inline-block;max-width:560px">
   <strong>&#128230; Your files are available via Retyc:</strong><br>
   <a href="${safe}" style="color:#1a3c6e">${safe}</a><br>
-  <small style="color:#888">This transfer is end-to-end encrypted and will expire automatically.</small>
-</p>`
+  <small style="color:#888">&#128274; End-to-end encrypted${expiryLine}</small>
+</div>`
 }
 
 // --- Pipeline ---
@@ -174,7 +188,7 @@ export async function performRetycTransfer(
 
   const result = await sdk.transfers.upload({
     recipients: options.recipients,
-    expires: options.expires,
+    expires: options.expires as unknown as number, // null = never expires; SDK types are conservative but backend accepts it
     files: uploadFiles,
     ...(options.passphrase ? { passphrase: options.passphrase } : {}),
     ...(options.onProgress
@@ -209,7 +223,7 @@ export async function performRetycTransfer(
   }
 
   // Inject the Retyc link into the compose body, before Outlook's signature when present.
-  await injectLinkSnippet(item, buildLinkSnippet(transferUrl))
+  await injectLinkSnippet(item, buildLinkSnippet(transferUrl, options.expires))
 
   return { transferUrl }
 }

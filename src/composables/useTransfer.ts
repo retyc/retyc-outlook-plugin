@@ -18,7 +18,7 @@ export interface UploadStatus {
 
 export interface ExpiryOption {
   label: string
-  value: number
+  value: number | null
 }
 
 const EXPIRY_VALUES = [
@@ -65,7 +65,7 @@ export function useTransfer(options: UseTransferOptions) {
   const passphrase = ref('')
   const passphraseError    = ref('')
   const passphraseRequired = ref(false)
-  const expirySeconds = ref(604800)
+  const expirySeconds = ref<number | null>(604800)
   const expiryOptions = ref<ExpiryOption[]>([{ label: t('transfer.expiryOptions.days7'), value: 604800 }])
   const maxShareSize  = ref<number | null>(null)
   const uploadStatus  = ref<UploadStatus | null>(null)
@@ -101,10 +101,10 @@ export function useTransfer(options: UseTransferOptions) {
       const max = caps.max_share_expiration_time
       expiryOptions.value = max == null
         ? all
-        : all.filter(o => o.value <= max)
+        : all.filter(o => o.value !== null && o.value <= max)
       maxShareSize.value = caps.max_share_size
     } catch {
-      expiryOptions.value = all.filter(o => o.value <= 604800)
+      expiryOptions.value = all.filter(o => o.value !== null && o.value <= 604800)
     }
     if (!expiryOptions.value.find(o => o.value === expirySeconds.value)) {
       expirySeconds.value = expiryOptions.value[expiryOptions.value.length - 1]?.value ?? 604800
