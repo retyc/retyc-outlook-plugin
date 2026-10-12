@@ -35,25 +35,26 @@
     "clean": "rm -rf dist .certs manifest.dev.xml"
   },
   "dependencies": {
-    "@nuxt/ui": "^4.7.1",
+    "@iconify/vue": "^5.0.3",
+    "@nuxt/ui": "^4.11.3",
     "@retyc/sdk": "1.1.0-beta1",
-    "vue": "^3.5.33",
-    "vue-i18n": "^11.4.0"
+    "buffer": "^6.0.3",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.43",
+    "vue-i18n": "^11.4.14"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@iconify-json/lucide": "^1.2.105",
+    "@iconify-json/lucide": "^1.2.143",
     "@iconify/types": "^2.0.0",
-    "@iconify/utils": "^3.1.1",
-    "@types/node": "^25.6.0",
-    "@types/office-js": "^1.0.589",
-    "@vitejs/plugin-vue": "^6.0.6",
-    "buffer": "^6.0.3",
-    "eslint": "^10.3.0",
-    "tailwindcss": "^4.2.4",
+    "@iconify/utils": "^3.1.7",
+    "@types/node": "^24.19.2",
+    "@types/office-js": "^1.0.611",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "eslint": "^10.12.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.1",
-    "vite": "^8.0.10",
-    "vue-tsc": "^3.2.7"
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.4",
+    "vue-tsc": "^3.3.13"
   }
 }
