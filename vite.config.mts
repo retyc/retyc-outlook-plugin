@@ -55,9 +55,13 @@ function lucideSubsetPlugin(): Plugin {
   const resolvedId = '\0' + virtualId
   const srcDir = path.resolve(__dirname, 'src')
   const re = /i-lucide-([a-z0-9-]+)/g
+  // Nuxt UI default icons rendered by components we use but never named in src/** (USelect's
+  // selected-item indicator). Without them Iconify falls back to fetching from its public API,
+  // which the task pane CSP blocks.
+  const nuxtUiDefaults = ['check']
 
   function collectUsedIcons(): string[] {
-    const used = new Set<string>()
+    const used = new Set<string>(nuxtUiDefaults)
     const entries = fs.readdirSync(srcDir, { recursive: true, withFileTypes: true }) as fs.Dirent[]
     for (const entry of entries) {
       if (!entry.isFile()) continue
@@ -137,23 +141,13 @@ export default defineConfig(({ mode }) => {
       manifestCopyPlugin(mode),
     ],
 
-    resolve: {
-      alias: {
-        'node:buffer':  'buffer',
-        'node:stream':  'stream-browserify',
-        'node:path':    path.resolve(__dirname, 'node_modules/path-browserify/index.js'),
-        'fs':           path.resolve(__dirname, 'src/shims/fs.ts'),
-        'path':         path.resolve(__dirname, 'node_modules/path-browserify/index.js'),
-      },
-    },
-
     define: {
       'process.env':    '{}',
       'global':         'globalThis',
     },
 
     optimizeDeps: {
-      include: ['buffer', 'stream-browserify', 'path-browserify'],
+      include: ['buffer'],
     },
 
     publicDir: 'public',
@@ -168,7 +162,7 @@ export default defineConfig(({ mode }) => {
           assetFileNames: '[name].[ext]',
           codeSplitting: {
             groups: [
-              { name: 'sdk', test: /(?:[\\/]retyc-ts-sdk[\\/]|[\\/]node_modules[\\/](@retyc[\\/]sdk|jose|buffer|stream-browserify|path-browserify)[\\/])/ },
+              { name: 'sdk', test: /(?:[\\/]retyc-ts-sdk[\\/]|[\\/]node_modules[\\/](@retyc[\\/]sdk|jose|buffer)[\\/])/ },
               { name: 'ui', test: /[\\/]node_modules[\\/]@nuxt[\\/]ui[\\/]/ },
               { name: 'reka', test: /[\\/]node_modules[\\/](reka-ui|@vueuse[\\/]core|@floating-ui|@iconify[\\/]vue)[\\/]/ },
               { name: 'vendor', test: /[\\/]node_modules[\\/]/ },

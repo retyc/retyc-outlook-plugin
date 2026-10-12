@@ -14,3 +14,6 @@ See our security policy and contact details at:
   Microsoft 365 across the user's devices. Anyone with access to the mailbox
   (account credentials or admin delegation) can read them. Protect your account
   with strong authentication and MFA.
+- The task pane is served with a `Content-Security-Policy` (see `.docker/nginx.conf`) that forbids inline and
+  `eval`-based scripts, which limits what an injected script could do with those tokens. It only applies when the
+  bundle is served through the provided nginx configuration.
