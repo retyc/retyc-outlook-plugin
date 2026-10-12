@@ -1,4 +1,4 @@
-import type { TokenSet, TokenStore } from '@retyc/sdk'
+import { isTokenSet, type TokenSet, type TokenStore } from '@retyc/sdk'
 import { STORAGE_KEY_TOKENS } from './constants'
 import { getStore } from './storage'
 
@@ -9,17 +9,12 @@ export class OfficeRoamingTokenStore implements TokenStore {
     const raw = getStore().get(STORAGE_KEY_TOKENS)
     if (typeof raw !== 'string' || !raw) return null
     try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>
-      if (
-        typeof parsed.accessToken !== 'string' ||
-        typeof parsed.refreshToken !== 'string' ||
-        typeof parsed.expiresAt !== 'number' ||
-        typeof parsed.tokenType !== 'string'
-      ) {
+      const parsed: unknown = JSON.parse(raw)
+      if (!isTokenSet(parsed)) {
         await this.clear()
         return null
       }
-      return parsed as unknown as TokenSet
+      return parsed
     } catch {
       await this.clear()
       return null

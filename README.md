@@ -105,20 +105,49 @@ For development against a Windows VM (recommended for testing Classic Outlook de
 ### Production hosting
 
 A multi-stage `Dockerfile` is provided. It builds the static bundle with Node 24 and serves it through nginx 1.30
-alpine-slim (~13 MB image). Images are **per-environment**: the manifest baked in (`manifest.xml`) and the API URL
-(`VITE_RETYC_API_URL`, defaults to `https://api.retyc.com`) are resolved at build time. Build a separate image for each
-environment.
+alpine-slim (~13 MB image). Images are **per-environment**: the manifest baked in (`manifest.xml`) and the two build
+args below are resolved at build time. Build a separate image for each environment.
+
+| Build arg             | Default                  | Used for                                                   |
+|-----------------------|--------------------------|------------------------------------------------------------|
+| `RETYC_API_BASE_URL`  | `https://api.retyc.com`  | API URL baked into the bundle + CSP `connect-src`          |
+| `RETYC_AUTH_BASE_URL` | `https://auth.retyc.com` | OIDC issuer origin, CSP `connect-src` only                 |
+
+Both must be absolute `http(s)` URLs — the build fails on an empty or malformed value.
 
 ```bash
 # Prod
 docker build -t retyc-outlook-plugin:prod .
 
-# Other environments — provide your own gitignored manifest, override the API URL at build time
+# Other environments — provide your own gitignored manifest, override the API and auth URLs at build time
 cp manifest.<env>.xml manifest.xml
 docker build \
-  --build-arg VITE_RETYC_API_URL=https://api.<env>.example.com \
+  --build-arg RETYC_API_BASE_URL=https://api.<env>.example.com \
+  --build-arg RETYC_AUTH_BASE_URL=https://auth.<env>.example.com \
   -t retyc-outlook-plugin:<env> .
 ```
+
+#### Content-Security-Policy
+
+nginx serves `taskpane.html` with a `Content-Security-Policy` header, defined in `.docker/nginx.conf`. Scripts are
+limited to the bundle itself and `office.js` (`appsforoffice.microsoft.com`) — no `unsafe-inline`, no `unsafe-eval` —
+and network calls to the Retyc API, the OIDC issuer and the Office CDN.
+
+- `connect-src` must list the API origin **and** the OIDC issuer origin (the one returned by
+  `<api>/login/config/public`). `nginx.conf` carries the prod values; the Dockerfile rewrites them at image build time
+  from `RETYC_API_BASE_URL` and `RETYC_AUTH_BASE_URL` (only the origin of each URL is kept). If an environment uses a
+  different issuer and `RETYC_AUTH_BASE_URL` is not set, login fails with a CSP violation in the console.
+- `frame-ancestors` lists the Outlook on the web origins allowed to embed the pane. An on-premises OWA or a sovereign
+  cloud served from another origin has to be added there.
+- `style-src` keeps `'unsafe-inline'`: Nuxt UI / reka-ui inject `<style>` tags at runtime.
+- The `sha256-…` entry in `script-src` matches a one-line inline script injected by Nuxt UI. After a Nuxt UI upgrade,
+  load the pane and check the console: a CSP error there means the hash must be updated (the browser prints the new
+  one).
+- Icons must come from the bundle: `connect-src` blocks Iconify's public API, so an icon missing from the Lucide subset
+  (see `lucideSubsetPlugin` in `vite.config.mts`) silently does not render.
+
+The Vite dev server (`npm run start`) does not send this header — to exercise the CSP inside Outlook, sideload against
+the Docker image.
 
 The `/` redirect is hardcoded to `/taskpane.html` (relative). Browsers hitting the bare-domain root land on the task
 pane directly — Outlook itself fetches `/taskpane.html` and never relies on the redirect.
