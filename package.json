@@ -1,6 +1,6 @@
 {
   "name": "retyc-outlook-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Outlook Add-in for Retyc — secure, end-to-end encrypted file transfers",
   "author": "TripleStack SAS",
