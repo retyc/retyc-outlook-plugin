@@ -102,6 +102,32 @@ npm run dev:setup      # regenerate mkcert leaf cert + manifest.dev.xml (used by
 For development against a Windows VM (recommended for testing Classic Outlook desktop on Linux hosts), see
 [`DEV_VM.md`](DEV_VM.md) — it covers the mkcert setup, the IP-rewritten `manifest.dev.xml`, and the sideload procedure.
 
+#### Outlook on the web against a local dev server
+
+Browsers restrict public pages (here `outlook.live.com` / `outlook.office.com`) from loading content served from a
+local address, so a sideloaded `manifest.dev.xml` does not work out of the box. Nothing in this repo can lift that: the
+permission has to be granted in the browser, for the Outlook site only.
+
+1. Generate the dev manifest and certificate for the default bridge IP, then start the server:
+   ```bash
+   DEV_HOST=192.168.122.1 npm run dev:setup
+   npm run start
+   ```
+   Keep `192.168.122.1` rather than `localhost` / `127.0.0.1`: it is the only dev origin the Retyc API accepts (CORS),
+   and Chromium treats loopback addresses as a separate permission from the local network one.
+2. Sideload `manifest.dev.xml` in Outlook on the web.
+3. Allow local network access for the Outlook site:
+    - **Firefox**: on the Outlook tab, `Ctrl+I` → **Permissions** → local network access → untick **Use Default** and
+      pick **Allow**. Firefox does not prompt by itself here — the console shows `auto_deny` until the permission is set.
+    - **Chromium / Chrome**: padlock → **Site settings** → **Local network access** → **Allow**. If the prompt was
+      dismissed with **Block** earlier, reset it there.
+4. Reload Outlook and open a compose window.
+
+Console messages that can be ignored: a blocked `icon-64.png` requested by `inclient.store.office.com` (the add-in
+store dialog, cosmetic only) and Outlook's own `Content-Security-Policy` warnings in Report-Only mode about `img-src`.
+
+The dev server does not send the task pane CSP — see [Content-Security-Policy](#content-security-policy).
+
 ### Production hosting
 
 A multi-stage `Dockerfile` is provided. It builds the static bundle with Node 24 and serves it through nginx 1.30
